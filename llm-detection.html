@@ -1,0 +1,376 @@
+<html lang="fa" dir="rtl">
+    <head>
+        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.rtl.min.css" integrity="sha384-dpuaG1suU0eT09tx5plTaGMLBsfDLzUCCUXOY2j/LSvXYuG6Bqs43ALlhIqAJVRb" crossorigin="anonymous">
+    </head>
+    <title>ارزیابی مدل زبانی</title>
+    <body onload="initial()">
+        <div class="container col-6">
+            <div class="container">
+                <h1 class="display-6">تحلیل مدل زبانی</h1>
+            </div>
+            
+            <div class="container">
+                <form class="form-control">
+                    <div class="mb-3">
+                        <div class="row">
+                            <div class="col-12">
+                                <div class="form-floating mb-3 mt-3">
+                                    <input type="text" id="system_prompt" class="form-control" value="تو یک دستیار هوشمند هستی">
+                                    <label for="email">دستور سیستم</label>
+                                </div>
+                                <div class="form-floating mb-3 mt-3">
+                                    <input type="text" id="input" class="form-control" value="برای کوهنوردی چه وسایلی با خودم ببرم؟">
+                                    <label for="email">ورودی کاربر</label>
+                                    <input type="text" id="f_input" style="visibility:hidden" hidden>
+                                </div>
+                            </div>
+                            <div class="row">
+                                    <div class="col-4">
+                                        <label for="steps">تعداد توکن تولیدی</label>
+                                        <input type="number" id="steps" class="form-control" name="steps" value="10">
+                                    </div>
+                                    <div class="col-4">
+                                        <label for="k">تعداد توکن پیشنهادی</label>
+                                    <input type="number" name="k" id="k" class="form-control" value="5">
+                                    </div>
+                                    <div class="col-4">
+                                        <label for="models">مدل</label>
+                                        <select class="form-select" name="models" id="models" onchange="change_model(this.value)"></select>
+                                    </div>
+                                    
+                            </div>
+                            
+                        </div>
+                        <div class="row">
+                            <div class="form-check form-switch" style="padding-right:3.5em !important;">
+                                <label class="form-check-label" for="mySwitch">چت تمپلیت</label>
+                                <input class="form-check-input" type="checkbox" id="chat_template_switch" name="darkmode"  onchange="chat_template()">
+                            </div>
+                        </div>
+                        
+                    </div>
+                    <div class="col-12">
+                        <button type="button" onclick="generate(1)" class="btn btn-primary">تولید توکن بعد</button>
+                        <button type="button" onclick="generate(document.getElementById('steps').value)" class="btn btn-primary">تولید دسته‌ای</button>
+                        <button type="button" onclick="change_direction()" class="btn btn-primary">تغییر جهت متن</button>
+                        <button type="button" onclick="reset_form()" class="btn btn-danger">پاک کردن</button>
+                    </div>
+                    
+                </form>
+                
+                <div class="row">
+                    <div class="container col-2">
+                        پیشنهادات:
+                        <div id="suggestions" style="display:grid;"></div>
+                    </div>
+                    <div class="container col-10">
+                        لایه ها:
+                        <div id="layers" style="display:flex;flex-wrap:wrap;flex-direction: row-reverse;"></div>
+                    </div>
+                </div>
+                
+                <div class="container">
+                    توکن‌های تولید شده:
+                    <div id="container" style="display:flex;flex-wrap:wrap"></div>
+                </div>
+                <canvas id="myChart" class="container"></canvas>
+            </div>
+        </div>
+
+        
+        
+        
+    </body>
+    <script type="text/javascript">
+        function initial(){
+            console.log("salam")
+            document.getElementById("f_input").value = document.getElementById("input").value
+            const url = "http://192.168.11.18:5000/models"
+            xhr = new XMLHttpRequest()
+            xhr.onload = function(){
+                if(xhr.status === 200) {
+                    json_response = JSON.parse(xhr.response)
+                    for(m of json_response.models){
+                        let opt = document.createElement("option")
+                        opt.setAttribute("style", "direction:ltr")
+                        opt.innerText = m
+                        document.getElementById("models").append(opt)
+                    }
+                }
+            }
+            xhr.open('GET', url, true)
+            xhr.setRequestHeader('Content-type', 'application/json; charset=UTF-8')
+            xhr.send();
+        }
+        
+        colors = ["#ff595e", "#ffca3a", "#8ac926", "#1982c4", "#6a4c93"]
+        let idx = 0
+        let chat_template_var = false
+
+        function change_model(name){
+            console.log("jjj")
+            const url = "http://192.168.11.18:5000/change_model"
+            xhr = new XMLHttpRequest()
+            xhr.onload = function(){
+                if(xhr.status === 200) {
+                    console.log("model change was successful")
+                }
+            }
+            xhr.open('POST', url, true)
+            xhr.setRequestHeader('Content-type', 'application/json; charset=UTF-8')
+            xhr.send(JSON.stringify({name:name}));
+        }
+        function generate(steps){
+            const url = "http://192.168.11.18:5000/get_next_token"
+            xhr = new XMLHttpRequest()
+            if(document.getElementById("f_input").value == ""){
+                document.getElementById("f_input").value = document.getElementById("input").value
+            }
+            let text = document.getElementById("f_input").value
+            let k = document.getElementById("k").value
+            for(span of document.getElementById("container").children){
+                if (span.innerText ==""){
+                    text += " "
+                }else{
+                    text += span.innerText
+                }
+                
+            }
+            let postObj = { 
+                text: text, 
+                k: k,
+                steps: steps
+            }
+            let post = JSON.stringify(postObj)
+            xhr.onload = function(){
+                if(xhr.status === 200) {
+                    console.log(xhr.response)
+                    json_response = JSON.parse(xhr.response)
+                    console.log(json_response.tokens[json_response.tokens.length-1].length)
+                    for(let i=0;i<steps;i++){
+                        let span = document.createElement('div')
+                        span.setAttribute("style","margin-right:2px;margin-top:5px;margin-bottom:5px;float:inline-start;padding:5px;background:"+colors[idx]+" !important;")
+                        span.setAttribute("id","token_"+(json_response.tokens[json_response.tokens.length-1].length-steps+i).toString())
+                        span.setAttribute("onclick", "go_back(this.id)")
+                        idx+=1
+                        if(idx==5){
+                            idx=0
+                        }
+                        span.innerText =  json_response.next_token[i]
+                        for(let j =0; j<json_response.alt[i].length; j++){
+                            let span_h = document.createElement('div')
+                            span_h.setAttribute("style","visibility:hidden;z-index: 1;position: absolute;")
+                            span_h.setAttribute("id","suggest_"+i+"_"+j)
+                            span_h.setAttribute("onclick", "select(this.id)")
+                            span_h.innerText =  json_response.alt[i][j] +"_"+ json_response.prob[i][j]
+                            span.append(span_h)
+                        }
+                        document.getElementById("container").append(span)
+                    }
+                    
+                    document.getElementById("suggestions").innerHTML=""
+                    for(let i =0; i<json_response.alt[json_response.alt.length-1].length; i++){
+                        let span = document.createElement('span')
+                        span.setAttribute("style","margin-right:2px;margin-top:5px;margin-bottom:5px;float:inline-start;padding:5px;background:#ffca28;text-align:center;")
+                        span.setAttribute("id","suggest_"+i)
+                        span.setAttribute("onclick", "select(this.id)")
+                        span.innerText =  json_response.alt[json_response.alt.length-1][i]
+                        document.getElementById("suggestions").append(span)
+                    }
+                    document.getElementById("layers").innerHTML=""
+                    for(let i =0; i<json_response.layer_tokens[json_response.layer_tokens.length-1].length; i++){
+                        let span = document.createElement('span')
+                        span.setAttribute("style","margin-right:2px;margin-top:5px;margin-bottom:5px;float:inline-start;padding:5px;background:#8BC34A;")
+                        span.setAttribute("id","layer_"+i)
+                        span.setAttribute("onclick", "select(this.id)")
+                        span.innerText =  "layer_"+i+": "+json_response.layer_tokens[json_response.layer_tokens.length-1][i]
+                        document.getElementById("layers").append(span)
+                    }
+                    document.getElementById('myChart').remove()
+                    const ctx = document.createElement("canvas");
+                    ctx.setAttribute("id", "myChart")
+                    ctx.setAttribute("class", "container")
+                    ctx.setAttribute("style", "width:300px !important;height:200px !important;")
+                    document.getElementsByTagName('body')[0].append(ctx)
+                    let delayed;
+                    new Chart(ctx, {
+                      type: 'bar',
+                      data: {
+                        labels: json_response.alt[json_response.alt.length-1],
+                        datasets: [{
+                          label: 'احتمالات',
+                          data: json_response.prob[json_response.prob.length-1],
+                          borderWidth: 1
+                        }]
+                      },
+                      options: {
+                        animation: {
+                            onComplete: () => {
+                              delayed = true;
+                            },
+                            delay: (context) => {
+                              let delay = 0;
+                              if (context.type === 'data' && context.mode === 'default' && !delayed) {
+                                delay = context.dataIndex * 300 + context.datasetIndex * 100;
+                              }
+                              return delay;
+                            },
+                        },
+                        responsive: false,
+                        maintainAspectRatio: false,
+                        
+                        scales: {
+                          y: {
+                            beginAtZero: true,
+                            max: 1,
+                          }
+                        }
+                      }
+                    });
+                }
+            }
+            xhr.open('POST', url, true)
+            xhr.setRequestHeader('Content-type', 'application/json; charset=UTF-8')
+            xhr.send(post);
+        }
+        
+        function go_back(id){
+            idx = 0
+            div = document.createElement("div")
+            for(s of document.getElementById('container').children){
+                if(Number(s.id.split("_")[1])<=Number(id.split("_")[1])){
+                    new_element = s.cloneNode(true)
+                    div.append(new_element)
+                    idx+=1
+                    if(idx==5){
+                        idx=0
+                    }
+                }
+            }
+            document.getElementById('container').innerHTML = ""
+            while (div.childNodes.length > 0) {
+                document.getElementById('container').appendChild(div.childNodes[0]);
+              }
+            document.getElementById("suggestions").innerHTML=""
+            suggestions = []
+            probs = []
+            for(let i=0;i<document.getElementById('container').lastChild.children.length;i++){
+                x = document.getElementById('container').lastChild.children[i].innerHTML.split("_")
+                suggestions.push(x[0])
+                probs.push(x[1])
+            }
+            for(let i =0; i<suggestions.length; i++){
+                let span = document.createElement('span')
+                span.setAttribute("style","margin-right:2px;margin-top:5px;margin-bottom:5px;float:inline-start;padding:5px;background:#8BC34A;")
+                span.setAttribute("id","suggest_"+i)
+                span.setAttribute("onclick", "select(this.id)")
+                span.innerText = suggestions[i]
+                document.getElementById("suggestions").append(span)
+            }
+
+            document.getElementById('myChart').remove()
+            const ctx = document.createElement("canvas");
+            ctx.setAttribute("id", "myChart")
+            ctx.setAttribute("class", "container")
+            ctx.setAttribute("style", "width:600px !important;height:400px !important;")
+            document.getElementsByTagName('body')[0].append(ctx)
+            let delayed;
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                labels: suggestions,
+                datasets: [{
+                    label: 'احتمالات',
+                    data: probs,
+                    borderWidth: 1
+                }]
+                },
+                options: {
+                animation: {
+                    onComplete: () => {
+                        delayed = true;
+                    },
+                    delay: (context) => {
+                        let delay = 0;
+                        if (context.type === 'data' && context.mode === 'default' && !delayed) {
+                        delay = context.dataIndex * 300 + context.datasetIndex * 100;
+                        }
+                        return delay;
+                    },
+                },
+                responsive: false,
+                maintainAspectRatio: false,
+                
+                scales: {
+                    y: {
+                    beginAtZero: true,
+                    max: 1,
+                    }
+                }
+                }
+            });
+
+
+        }
+
+        function select(id){
+            document.getElementById('container').lastChild.innerHTML = document.getElementById(id).innerHTML
+        }
+
+        function change_direction(){
+            if(document.getElementById('container').style.direction=='ltr'){
+                document.getElementById('container').style.direction='rtl';
+            }else{
+                document.getElementById('container').style.direction='ltr';
+            }
+            
+        }
+    
+        function reset_form(){
+            document.getElementById("input").value = ""
+            document.getElementById("f_input").value = ""
+            document.getElementById('container').innerHTML = ""
+            document.getElementById("suggestions").innerHTML=""
+            document.getElementById('myChart').remove()
+            const ctx = document.createElement("canvas");
+            ctx.setAttribute("id", "myChart")
+            ctx.setAttribute("class", "container")
+            ctx.setAttribute("style", "width:600px !important;height:400px !important;")
+            document.getElementsByTagName('body')[0].append(ctx)
+        }
+    
+        function chat_template(){
+            console.log("aaaa")
+            console.log(document.getElementById("chat_template_switch").checked)
+            if(document.getElementById("chat_template_switch").checked){
+                const url = "http://192.168.11.18:5000/set_chat_template"
+                xhr = new XMLHttpRequest()
+                let text = document.getElementById("input").value
+                let system_text = document.getElementById("system_prompt").value
+                let postObj = { 
+                    user_text: text,
+                    system_text: system_text
+                }
+                let post = JSON.stringify(postObj)
+                xhr.onload = function(){
+                    if(xhr.status === 200) {
+                        console.log(xhr.response)
+                        json_response = JSON.parse(xhr.response)
+                        document.getElementById("f_input").value = json_response.text
+                    }
+                }
+                xhr.open('POST', url, true)
+                xhr.setRequestHeader('Content-type', 'application/json; charset=UTF-8')
+                xhr.send(post);  
+            }else{
+                console.log(document.getElementById("input").value)
+                document.getElementById("f_input").value = document.getElementById("input").value
+                console.log(document.getElementById("f_input").value)
+
+            }
+        }
+    </script>
+</html>
